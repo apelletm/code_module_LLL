@@ -1,4 +1,4 @@
-# code_module_LLL
+# Module LLL
 
 This is the code that was used to produce the experimental results of 
 the article ``An LLL Algorithm for Module Lattices''. In repository 'test_norm'
