@@ -1,0 +1,204 @@
+/////////////////////////////////////////
+//// This code compute the lattice L
+//// used in the module LLL article
+//// The lattice is then stored in a
+//// file to be used in Sage
+/////////////////////////////////////////
+
+
+// Fixing the random seed for reproductibility
+SetSeed(17);
+
+input := StringToIntegerSequence(input);
+m := input[1];
+r := input[2];
+K := CyclotomicField(m);
+R := MaximalOrder(K);
+
+d := Degree(K);
+r1,r2 := Signature(K);
+
+V,sigma := MinkowskiSpace(K); //sigma is the canonical embedding
+J := ComplexField().1;
+
+Delta := AbsoluteValue(Discriminant(K));
+precision := 2^10;
+
+/////////////////////////////////////
+// Computation of the lattice L
+////////////////////////////////////
+
+
+//// Class group computation
+
+SetClassGroupBounds("GRH");
+class_gp, map_cg := ClassGroup(R);
+hK := ClassNumber(R);
+BB_prime, delta0 := FactorBasis(R); // BB_prime contains all ideals of norm smaller than delta_0
+// Compared to the article, delta_0 is the bound on the norm. It is equal to d^delta_0 in the article.
+mat_rel := EchelonForm(RelationMatrix(R));
+
+
+//// Removing non useful ideals to create BB
+
+BB := [];
+for i in [1..#BB_prime] do
+   if not mat_rel[i,i] eq 1 then
+      Append(~BB, BB_prime[i]);
+   end if;
+end for;
+
+//// Remark: for the dimension tested here (i.e. of degree at most 8), the cyclotomic fields are 
+// principal and BB is empty. However, if one wants to try a cyclotomic field of higher degree, 
+// the code above would compute a set BB corresponding to the set B0 described in the article 
+// (i.e. a set generating the class group of cardinality at most log(h_K) ).
+
+r0 := #BB ; // for our tests, r_0 = 0, this is normal because the rings are principal
+
+//// Compute the Determinant of Lambda (the log unit lattice)
+U, mU := IndependentUnits(R); // compute the units
+list_L := []; // list of the vectors of the log units
+for gU in [x : x in Generators(U) | Order(x) eq 0] do
+   g := mU(gU); // a unit
+
+   // creating Log(g)
+   w := Logs(g); // Log(g)
+   for i in [1..r2] do // add to the Log vector the log of the forgotten complex embeddings
+      Append(~w,w[r1+i]); // (To match the definition of Log in the article, with the log of all embeddings)
+   end for;
+   v := [RealField() ! w[i] : i in [1..#w]];
+   Append(~list_L,v); // add the created vector to the list
+end for;
+M := Matrix(list_L);
+det_Lambda := Sqrt(Determinant(M*Transpose(M)));
+
+
+//// Setting the parameters
+B := Ceiling(10* Log(2,Max(hK,2)) * Max(1,Log(delta0)/Log(r))); // delta is approximated by r.
+// delta0 is supposed to be larger than delta. In our cases, this will usually not be the case hence we take the max of Log(delta0)/Log(delta) with 1.
+r := Max(B+1,r); // Ensures that r is larger than B
+
+alpha := Sqrt(2*3.14)*((2*B/r)^B*Log(r)*B*det_Lambda*hK)^(1/d);
+beta := 1/alpha*Sqrt(0.1*B/(2*d)); // The constants 100 and 0.01 from the article are replaced by 10 and 0.1 for practicability
+
+nu := 2*(r1+r2) - 1 + r0 + r;
+
+// Create a list L of ideals smaller than some bound delta (compared to the article, delta here is the bound on the norm and not on the log of the norm)
+delta := r;
+L := FactorBasis(R,delta);
+
+// If there is not enough ideals, increase the bound by a factor 2
+while not #L ge 3*r do
+   delta := 2*delta;
+   L := FactorBasis(R,delta);
+end while;
+
+
+// randomly choose elements of B_Prime to add to B
+// (and check that they are not alreary in B)
+for i in [1..r] do
+   I := Random(L);
+   while I in BB do
+      I := Random(L);
+   end while;
+   Append(~BB, I);
+end for;
+
+//// BB contains enough primes to generate the class group and have r additional primes
+
+// List of all the log(norm(p)) for p in BB
+log_norm := [Log(Norm(p)) : p in BB ];
+
+//// Compute the matrix B_L and the lattice L
+
+U, mU := SUnitGroup(BB); // compute the elements u (for Lambda) and g of the matrix B_L
+list_L := []; // list of the vectors of B_L (in columns)
+
+//first columns for arguments:
+for i in [1..r1+r2] do
+    Append(~list_L, [0 : j in [1..i-1] ] cat [beta*2*(3.141592)] cat [0 : j in [i+1..nu+r2+1] ]);
+end for;
+
+//"central lattice"
+for gU in [x : x in Generators(U) | Order(x) eq 0] do
+   g := mU(gU); // an S unit
+   I := g*R; // the corresponding ideal
+
+   // creating the beta*Log(g) part of the vector
+   // We do not separate the norm part from the rest, because this does not
+   // change the l2 norm of the vectors. This is only used in the
+   // article to simplify the analysis (the projection on H is easier
+   // to analyze without the norm part)
+   w := Logs(g); // Log(g)
+   for i in [1..r2] do // add to the Log vector the log of the forgotten complex embeddings
+      Append(~w,w[r1+i]); // (To match the definition of Log in the article, with the log of all embeddings)
+   end for;
+   v := [RealField() ! beta*w[i] : i in [1..#w]]; // beta*Log(g)
+
+   // computing the 'relation' part of the vector
+   L_factor := Factorisation(I);
+   for i in [1..#BB] do
+      Append(~v,0); // create the bottom part of v
+   end for;
+   for foo in L_factor do // add k to the good coordinate of v
+      p := foo[1];
+      k := foo[2];
+      i := 1;
+      while i le #BB and p ne BB[i] do // compute the good coordinate
+         i := i+1;
+      end while;
+      if i eq #BB+1 then // check that we indeed have a S-unit
+         print "warning: one of the S unit is not a S unit";
+      end if;
+      v[d+i] := k; // add k to the good coordinate
+   end for;
+
+    // Complete these vectors v to get the correct shape:
+    // The norm is already included in the Log part (we did not project on H)
+    // The arguments:
+    Args_g := [];
+    sig_g := sigma(g);
+
+    for i in [1..r1] do
+        Append(~Args_g, beta*Argument(ComplexField() ! sig_g[i]));
+    end for;
+
+    for i in [1..r2] do
+        cplx := sig_g[r1+2*i-1]+J*sig_g[r1+2*i]; // cplx = sigma_i(g)* Sqrt(2)
+        Append(~Args_g, beta*Argument(cplx)); // The multiplication by Sqrt(2) has no impact on the argument
+    end for;
+
+    v_full := Args_g cat v;
+
+    Append(~list_L, v_full);
+end for;
+
+
+print "d = ", d, "\n";
+print "m = ", m, "\n";
+print "r = ", r, "; r0 = ", r0, "\n";
+print "r1 = ", r1, "; r2 = ", r2, "\n";
+print "list_L = ", list_L, "\n";
+print "beta=",beta, "\n";
+print "alpha=",alpha, "\n";
+print "B = ", B;
+print "log_norm = ", log_norm;
+
+
+// Test that the norm of the Log(g) part is equal to the sum wi log(norm(pi)) for the
+// bottom part of the vector 
+
+//for v in list_L do
+//   tmp := 0;
+//   for i in [1..d] do
+//      tmp := tmp + v[i+r1+r2]/beta;
+//   end for;
+//   for i in [1..r0+r] do
+//      tmp := tmp - v[r1+r2+d+i]*log_norm[i];
+//   end for;
+//   print tmp;
+//end for;
+
+
+
+exit;
