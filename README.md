@@ -1,10 +1,10 @@
 # Module LLL
 
 This is the code that was used to produce the experimental results of 
-the article ``An LLL Algorithm for Module Lattices''. In repository 'test_norm'
-you will find the code used for the experiments of Appendix A.1 and in
-repository 'full_heuristic' you will find the code used for the experiments of
-Appendix A.2.
+the article ``An LLL Algorithm for Module Lattices'' (ePrint 2019/1035: 
+https://eprint.iacr.org/2019/1035). 
+In repository 'test_norm' you will find the code used for the experiments of 
+Appendix A.1 and in repository 'full_heuristic' you will find the code used for the experiments of Appendix A.2.
 
 In both code, the random seed has been fixed to allow reproducibility of
 the results. This can be undone by commenting the corresponding line in
